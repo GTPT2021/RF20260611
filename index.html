@@ -132,6 +132,66 @@ body {
   pointer-events:none; backdrop-filter:blur(4px);
 }
 
+.zoom-control {
+  position:absolute;
+  right:14px;
+  top:50%;
+  transform:translateY(-50%);
+  width:52px;
+  height:174px;
+  border-radius:28px;
+  background:rgba(255,255,255,.56);
+  box-shadow:0 8px 22px rgba(80,70,40,.18), inset 0 1px 0 rgba(255,255,255,.8);
+  z-index:12;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:space-between;
+  padding:8px 6px;
+  backdrop-filter:blur(8px);
+  pointer-events:all;
+  user-select:none;
+}
+.zoom-btn {
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  border:none;
+  background:linear-gradient(160deg, #fde8d8, #f5c4a8);
+  box-shadow:0 3px 0 #c08060;
+  color:var(--text);
+  font-family:inherit;
+  font-size:24px;
+  line-height:1;
+  font-weight:900;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.zoom-btn:active { transform:translateY(2px); box-shadow:0 1px 0 #c08060; }
+.zoom-track {
+  position:relative;
+  width:8px;
+  flex:1;
+  margin:10px 0;
+  border-radius:999px;
+  background:rgba(107,63,42,.18);
+  overflow:hidden;
+}
+.zoom-fill {
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:50%;
+  border-radius:999px;
+  background:var(--pink);
+}
+@media (max-width: 600px) {
+  .zoom-control { right:10px; height:160px; width:48px; }
+  .zoom-btn { width:36px; height:36px; font-size:22px; }
+  .three-tip { bottom:20px; font-size:11px; }
+}
+
 /* Tile */
 .tile-wrap { display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; }
 .tile { position:relative; width:var(--tile-size); height:var(--tile-size); transition:transform .12s; user-select:none; }
@@ -273,6 +333,12 @@ if(typeof UI_IMGS !== 'undefined' && UI_IMGS.logo) {
   <div class="minimap" id="minimap"></div>
   <div class="iso-wrap"><canvas id="three-canvas"></canvas><div class="iso-grid" id="iso-grid" aria-hidden="true" style="display:none"></div></div>
   <div class="three-tip">拖曳旋轉視角｜點擊方塊翻轉森林</div>
+  <div class="zoom-control" id="zoom-control" aria-label="鏡頭遠近控制">
+    <button class="zoom-btn" id="zoom-in" type="button" aria-label="拉近鏡頭">+</button>
+    <div class="zoom-label">鏡頭遠近</div>
+    <div class="zoom-track" id="zoom-track" aria-hidden="true"><div class="zoom-fill" id="zoom-fill"></div></div>
+    <button class="zoom-btn" id="zoom-out" type="button" aria-label="拉遠鏡頭">-</button>
+  </div>
   <div class="brand">ROLL FOREST</div>
 
   <!-- complete overlay -->
@@ -724,10 +790,11 @@ let dragStarted = false;
 let dragStartX = 0;
 let dragStartY = 0;
 let dragLastX = 0;
-let dragLastY = 0;
 let cameraYaw = Math.PI / 4;
 let cameraPitch = 0.82;
 let cameraDistance = 8;
+const CAMERA_MIN_DISTANCE = 4.8;
+const CAMERA_MAX_DISTANCE = 13;
 let resizeObserver = null;
 
 
@@ -915,6 +982,19 @@ function updateCamera() {
   const z = Math.sin(cameraYaw) * Math.cos(cameraPitch) * cameraDistance;
   camera.position.set(x, y, z);
   camera.lookAt(target);
+  updateZoomUI();
+}
+
+function setCameraDistance(nextDistance) {
+  cameraDistance = Math.max(CAMERA_MIN_DISTANCE, Math.min(CAMERA_MAX_DISTANCE, nextDistance));
+  updateCamera();
+}
+
+function updateZoomUI() {
+  const fill = document.getElementById('zoom-fill');
+  if (!fill) return;
+  const ratio = 1 - ((cameraDistance - CAMERA_MIN_DISTANCE) / (CAMERA_MAX_DISTANCE - CAMERA_MIN_DISTANCE));
+  fill.style.height = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
 }
 
 function animate3D() {
@@ -948,8 +1028,7 @@ function renderGrid() {
 
   const spacing = 1.18;
   const offset = (gridSize - 1) * spacing / 2;
-  cameraDistance = Math.max(6.2, gridSize * 1.85);
-  updateCamera();
+  setCameraDistance(Math.max(6.2, gridSize * 1.85));
 
   const groundGeo = new THREE.CircleGeometry(gridSize * 1.05, 48);
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x9acc78, roughness: 1 });
@@ -1167,8 +1246,7 @@ function onCanvasPointerUp(event) {
 
 function onCanvasWheel(event) {
   event.preventDefault();
-  cameraDistance = Math.max(4.8, Math.min(13, cameraDistance + event.deltaY * 0.006));
-  updateCamera();
+  setCameraDistance(cameraDistance + event.deltaY * 0.006);
 }
 
 function pickTileFromPointer(event) {
@@ -1244,6 +1322,46 @@ function loseGame() {
 }
 
 // ── BUTTONS ──────────────────────────────────────
+
+function bindZoomButton(id, delta) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  let holdTimer = null;
+  let repeatTimer = null;
+  const stop = () => {
+    clearTimeout(holdTimer);
+    clearInterval(repeatTimer);
+    holdTimer = null;
+    repeatTimer = null;
+  };
+  const step = (event) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    setCameraDistance(cameraDistance + delta);
+  };
+  btn.addEventListener('click', step);
+  btn.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    step(event);
+    holdTimer = setTimeout(() => {
+      repeatTimer = setInterval(() => setCameraDistance(cameraDistance + delta), 80);
+    }, 260);
+  });
+  btn.addEventListener('pointerup', stop);
+  btn.addEventListener('pointercancel', stop);
+  btn.addEventListener('pointerleave', stop);
+}
+
+bindZoomButton('zoom-in', -0.55);
+bindZoomButton('zoom-out', 0.55);
+const zoomControl = document.getElementById('zoom-control');
+if (zoomControl) {
+  ['pointerdown','pointermove','pointerup','click','touchstart','touchmove'].forEach(type => {
+    zoomControl.addEventListener(type, event => event.stopPropagation(), { passive:false });
+  });
+}
+
 document.getElementById('btn-back-game').addEventListener('click', () => { buildLevelSelect(currentMode); show('s-level'); });
 document.getElementById('btn-reset-game').addEventListener('click', () => startLevel(currentMode, currentLevelIdx));
 document.getElementById('btn-next').addEventListener('click', () => {
