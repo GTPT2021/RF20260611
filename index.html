@@ -45,8 +45,47 @@ body {
 .title-tap { color:rgba(255,255,255,0.9); font-size:18px; font-weight:700; letter-spacing:2px; animation:blink 1.5s ease-in-out infinite; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
+.title-tree-panel {
+  width:min(420px, 92vw);
+  background:rgba(255,255,255,0.36);
+  border:2px solid rgba(255,255,255,0.45);
+  border-radius:22px;
+  padding:12px;
+  margin:-8px 0 22px;
+  box-shadow:0 8px 24px rgba(65,100,45,0.14);
+}
+.title-tree-heading {
+  color:var(--text);
+  font-size:16px;
+  font-weight:900;
+  text-align:center;
+  margin-bottom:9px;
+}
+.title-tree-grid {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+}
+.title-tree-hint {
+  margin-top:8px;
+  text-align:center;
+  font-size:12px;
+  font-weight:800;
+  color:#8a684a;
+}
+@media (max-height: 720px) {
+  .title-logo { margin-bottom:18px; }
+  .title-deco { margin-bottom:18px; font-size:38px; }
+  .title-tree-panel { margin-bottom:14px; }
+}
+@media (max-width: 420px) {
+  .title-tree-grid { grid-template-columns:repeat(2,1fr); }
+}
+
+
 /* ── MODE SELECT ── */
-#s-mode { background: radial-gradient(ellipse at 50% 30%, #d0f0b0, #a0cc80); gap:16px; padding:24px; }
+#s-mode { background: radial-gradient(ellipse at 50% 30%, #d0f0b0, #a0cc80); gap:16px; padding:24px; justify-content:flex-start; overflow-y:auto; }
+#s-mode.active { display:flex; }
 .mode-title { font-size:26px; font-weight:900; color:var(--text); margin-bottom:8px; }
 .mode-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; width:min(360px,90vw); }
 .mode-btn {
@@ -349,6 +388,11 @@ if(typeof UI_IMGS !== 'undefined' && UI_IMGS.logo) {
   document.getElementById('logo-img').src = UI_IMGS.logo;
 }
 </script>
+  <div class="title-tree-panel">
+    <div class="title-tree-heading">🌲 先選樹模型</div>
+    <div class="title-tree-grid" id="title-tree-grid"></div>
+    <div class="title-tree-hint">選好後點下方開始遊戲</div>
+  </div>
   <div class="title-tap">＜ 點任意處開始 ＞</div>
   <div class="brand">ROLL FOREST</div>
 </div>
@@ -944,27 +988,34 @@ document.getElementById('s-title').addEventListener('click', () => {
   show('s-mode');
 });
 
+buildTreeSelect();
+
 
 function buildTreeSelect() {
-  const wrap = document.getElementById('tree-select-grid');
+  const wraps = [
+    document.getElementById('tree-select-grid'),
+    document.getElementById('title-tree-grid')
+  ].filter(Boolean);
   const nameEl = document.getElementById('tree-selected-name');
-  if (!wrap) return;
   const selected = getSelectedTreeModel();
   if (nameEl) nameEl.textContent = selected.name;
-  wrap.innerHTML = '';
-  TREE_MODELS.forEach(model => {
-    const btn = document.createElement('button');
-    btn.className = 'tree-btn' + (model.id === selectedTreeModelId ? ' active' : '');
-    btn.type = 'button';
-    btn.innerHTML = `<span class="tree-icon">${model.icon}</span><span>${model.name}</span><span class="tree-file">${model.file}</span>`;
-    btn.addEventListener('click', event => {
-      event.stopPropagation();
-      selectTreeModel(model.id);
-      preloadTreeModel(model);
+  wraps.forEach(wrap => {
+    wrap.innerHTML = '';
+    TREE_MODELS.forEach(model => {
+      const btn = document.createElement('button');
+      btn.className = 'tree-btn' + (model.id === selectedTreeModelId ? ' active' : '');
+      btn.type = 'button';
+      btn.innerHTML = `<span class="tree-icon">${model.icon}</span><span>${model.name}</span><span class="tree-file">${model.file}</span>`;
+      btn.addEventListener('click', event => {
+        event.stopPropagation();
+        selectTreeModel(model.id);
+        preloadTreeModel(model);
+      });
+      wrap.appendChild(btn);
     });
-    wrap.appendChild(btn);
   });
 }
+
 
 // ── MODE SELECT ──────────────────────────────────
 function buildModeSelect() {
