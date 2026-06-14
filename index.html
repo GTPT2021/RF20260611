@@ -972,6 +972,72 @@ let moveTimes = 0;
 let isPaused = false;
 let bestStars = {};  // key: "mode-id" -> stars
 
+
+// ── AUDIO ───────────────────────────────────────
+const AUDIO_FILES = {
+  bgm: 'BGM1W3NTD.wav',
+  roll: 'Roll.wav',
+  finish: 'Finish.mp3',
+  button: 'BTN_1.wav'
+};
+
+const gameAudio = {
+  bgm: new Audio(AUDIO_FILES.bgm),
+  roll: new Audio(AUDIO_FILES.roll),
+  finish: new Audio(AUDIO_FILES.finish),
+  button: new Audio(AUDIO_FILES.button)
+};
+
+gameAudio.bgm.loop = true;
+gameAudio.bgm.volume = 0.32;
+gameAudio.roll.volume = 0.75;
+gameAudio.finish.volume = 0.85;
+gameAudio.button.volume = 0.65;
+
+let audioUnlocked = false;
+
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  playBGM();
+}
+
+function playBGM() {
+  const bgm = gameAudio.bgm;
+  if (!bgm.paused) return;
+  bgm.play().catch(() => {
+    // 手機瀏覽器需要玩家先觸碰畫面，下一次互動會再嘗試播放。
+    audioUnlocked = false;
+  });
+}
+
+function playSfx(name) {
+  const base = gameAudio[name];
+  if (!base) return;
+  try {
+    const sound = base.cloneNode(true);
+    sound.volume = base.volume;
+    sound.play().catch(() => {});
+  } catch (err) {
+    try {
+      base.currentTime = 0;
+      base.play().catch(() => {});
+    } catch (_) {}
+  }
+}
+
+function playRollSound() { playSfx('roll'); }
+function playFinishSound() { playSfx('finish'); }
+function playButtonSound() { playSfx('button'); }
+
+document.addEventListener('pointerdown', unlockAudio, { capture:true });
+document.addEventListener('click', () => {
+  if (audioUnlocked) playBGM();
+}, { capture:true });
+document.addEventListener('pointerdown', event => {
+  if (event.target.closest('button')) playButtonSound();
+}, { capture:true });
+
 // ── THREE.JS 3D STATE ────────────────────────────
 let scene, camera, renderer, raycaster, pointer, boardGroup;
 let clickableTiles = [];
@@ -1540,6 +1606,8 @@ function onTileClick(idx) {
   if (isPaused) return;
   if (!grid[idx] || grid[idx].state === 'hidden') return;
 
+  playRollSound();
+
   // toggle clicked
   toggleCell(idx, false);
 
@@ -1574,6 +1642,7 @@ function checkWin() {
 
 function winGame() {
   isPaused = true;
+  playFinishSound();
   const lv = ALL_LEVELS[currentMode][currentLevelIdx];
   const stars = 3; // 過關永遠三星
   const key = currentMode + '-' + lv.id;
